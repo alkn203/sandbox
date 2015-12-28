@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+ 
+<html>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <title>Sprite Partial Sample</title>
+    <meta name="description" content="" />
+    
+    <style>body {
+  background-color: hsl(0, 0%, 96%);
+}
+
+h1 {
+  color: #444;
+  font-size: 23px;
+  font-family: 'Lucida Grande','Hiragino Kaku Gothic ProN', Meiryo, sans-serif;
+}</style>
+    
+    <script src="https://rawgit.com/phi-jp/phina.js/develop/build/phina.js"></script>
+    <script>
+phina.globalize();
+// アセット
+var ASSETS = {
+  // 画像シート
+  image: {
+    'bg': 'https://raw.githubusercontent.com/alkn203/sandbox/master/bg_img.png',
+  },
+};
+// メインシーン
+phina.define('MainScene', {
+  superClass: 'CanvasScene',
+  // コンストラクタ
+  init: function() {
+    // 親クラス初期化
+    this.superInit();
+
+    var bg = Sprite('bg').addChildTo(this)
+      .setPosition(this.gridX.center(), this.gridY.center());
+      
+    var image = bg.image.domElement;
+    var canvas = Canvas().setSize(bg.width, bg.height);
+    canvas.context.drawImage(image, 0, 0);
+    var data = canvas.context.getImageData(0, 0, 1, 1);
+    console.log(date.length);
+
+  },
+});
+// ピースクラス
+phina.define('Piece', {
+  superClass: 'Sprite',
+  // コンストラクタ
+  init: function() {
+    // 親クラス初期化
+    this.superInit('bg');
+  },
+});
+// メイン
+phina.main(function() {
+  var app = GameApp({
+    startLabel: 'main',
+    assets: ASSETS,
+  });
+  app.run();
+});</script>
+  </head>
+  <body>
+  </body>
+</html>
