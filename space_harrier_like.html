@@ -1,0 +1,185 @@
+<!doctype html>
+ 
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <title>Forked: Forked: Forked: prime factor decomposition</title>
+    <meta name="description" content="${description}" />
+    
+    <style>*, *:before, *:after {
+  box-sizing: border-box; 
+}
+html {
+  font-size: 62.5%;
+}
+body {
+  color: #444;
+  background-color: hsl(0, 0%, 96%);
+}
+h1 {
+  font-size: 1.8rem;
+}
+
+</style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/gh/phinajs/phina.js@v0.2.3/build/phina.js"></script>
+    <script>// グローバルに展開
+phina.globalize();
+/*
+ * メインシーン
+ */
+phina.define("MainScene", {
+  // 継承
+  superClass: 'DisplayScene',
+  // 初期化
+  init: function() {
+    // 親クラス初期化
+    this.superInit();
+    // 背景色
+    this.backgroundColor = 'black';
+    // 視野角
+    var angle = 60;
+    // 解像度幅
+    this.w = 640;
+    // 解像度高さ
+    this.h = 960;
+    
+    var w = this.w;
+    var h = this.h;
+    this.size = ((w > h) ? w : h) * 0.5;
+    // 視点からの距離
+    this.fov = 1 / Math.tan(angle * 0.5 * Math.PI / 180);
+    // canvas要素描画用
+    var elem  = PlainElement({
+      width: this.w,
+      height: this.h, 
+    }).addChildTo(this).setPosition(this.w / 2, this.h / 2);
+    // canvasパラメータ指定
+    elem.canvas.context.strokeStyle = 'white';
+    elem.canvas.context.lineWidth = 4;
+    elem.canvas.context.fillStyle = 'blue';
+    
+    var vertical = 128;
+    var num = 20;
+    var j = 0;
+    for(var i = -1 * vertical * num; i <= vertical * num; i = i + 64) {
+      var p1 = Vector3(i, 600, 10000);
+      var p2 = Vector3(i, 600, 1000);
+      var p3 = Vector3(i + vertical, 600, 1000);
+      var p4 = Vector3(i + vertical, 600, 10000);
+      
+      var v1 = this.getProjectionPos(p1);
+      var v2 = this.getProjectionPos(p2);
+      var v3 = this.getProjectionPos(p3);
+      var v4 = this.getProjectionPos(p4);
+  
+      if (j % 2 === 0) {
+        elem.canvas.context.fillStyle = 'blue';
+      }
+      else {
+        elem.canvas.context.fillStyle = 'lime';
+      }
+
+      elem.canvas.beginPath()
+                 .moveTo(v1.x, v1.y)
+                 .lineTo(v2.x, v2.y)
+                 .lineTo(v3.x, v3.y)
+                 .lineTo(v4.x, v4.y)
+                 .fill();
+      
+      j++;
+    }
+    // 参照用
+    this.elem = elem;
+    // グループ
+    this.hlineGroup = DisplayElement().addChildTo(this);
+    //
+    HorizontalLine(0, 600, 10000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 9000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 8000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 7000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 6000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 5000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 4000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 3000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 2000).addChildTo(this.hlineGroup);
+    HorizontalLine(0, 600, 1000).addChildTo(this.hlineGroup);
+  },
+  // 毎フレーム更新処理
+  update: function() {
+    this.hlineGroup.children.each(function(line) {
+      if (line.vec3.z < 200) {
+        line.vec3.z = 10000;
+      }
+      line.vec3.z -= 100;
+      this.setProjectionPos(line);
+    }, this);
+  },
+  //
+  getProjectionPos: function(vec3) {
+    // 平行投影変換
+    var z = vec3.z;
+    var fs = this.fov * this.size;
+    var d2x = (vec3.x / z * fs) | 0;
+    var d2y = (vec3.y / z * fs) | 0;
+    // 左上の原点を中心としたパースがかかるので画面の中心にパースがかかるように中央へ移動
+    d2x += this.w / 2;
+    d2y += this.h / 2;
+    //
+    return Vector2(d2x, d2y);  
+  },
+  //
+  setProjectionPos: function(line) {
+    // 平行投影変換
+    var z = line.vec3.z;
+    var fs = this.fov * this.size;
+    var d2x = (line.vec3.x / z * fs) | 0;
+    var d2y = (line.vec3.y / z * fs) | 0;
+    // 左上の原点を中心としたパースがかかるので画面の中心にパースがかかるように中央へ移動
+    d2x += this.w / 2;
+    d2y += this.h / 2;
+    //
+    line.setPosition(d2x, d2y);
+    line.height = (64 / z * fs) | 0;  
+  },
+});
+/*
+ * 地面の横のラインクラス
+ */
+phina.define("HorizontalLine", {
+  // 継承
+  superClass: 'RectangleShape',
+  // 初期化
+  init: function(x, y, z) {
+    // 親クラス初期化
+    this.superInit({
+      width: 640,
+      height: 1,
+      fill: 'red',
+      stroke: null,
+    });
+    // 3次元座標
+    this.vec3 = Vector3(x, y, z);
+  },
+});
+/*
+ * メイン処理
+ */
+phina.main(function() {
+  // アプリケーションを生成
+  var app = GameApp({
+    // MainScene から開始
+    startLabel: 'main',
+  });
+  // fps表示
+  //app.enableStats();
+  // 実行
+  app.run();
+});</script>
+  </body>
+</html>
+
