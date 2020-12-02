@@ -40,7 +40,7 @@ phina.define("MainScene", {
     // 親クラス初期化
     this.superInit();
     // 背景色
-    this.backgroundColor = 'black';
+    this.backgroundColor = 'skyblue';
     // 視野角
     var angle = 60;
     // 解像度幅
@@ -58,13 +58,9 @@ phina.define("MainScene", {
       width: this.w,
       height: this.h, 
     }).addChildTo(this).setPosition(this.w / 2, this.h / 2);
-    // canvasパラメータ指定
-    elem.canvas.context.strokeStyle = 'white';
-    elem.canvas.context.lineWidth = 4;
-    elem.canvas.context.fillStyle = 'blue';
     
     var vertical = 128;
-    var num = 20;
+    var num = 30;
     var j = 0;
     for(var i = -1 * vertical * num; i <= vertical * num; i = i + 64) {
       var p1 = Vector3(i, 600, 10000);
@@ -78,10 +74,10 @@ phina.define("MainScene", {
       var v4 = this.getProjectionPos(p4);
   
       if (j % 2 === 0) {
-        elem.canvas.context.fillStyle = 'blue';
+        elem.canvas.context.fillStyle = '#2e8b57';
       }
       else {
-        elem.canvas.context.fillStyle = 'lime';
+        elem.canvas.context.fillStyle = '#3cb371';
       }
 
       elem.canvas.beginPath()
@@ -108,6 +104,8 @@ phina.define("MainScene", {
     HorizontalLine(0, 600, 3000).addChildTo(this.hlineGroup);
     HorizontalLine(0, 600, 2000).addChildTo(this.hlineGroup);
     HorizontalLine(0, 600, 1000).addChildTo(this.hlineGroup);
+    
+    //this.hlineGroup.hide();
   },
   // 毎フレーム更新処理
   update: function() {
@@ -159,11 +157,13 @@ phina.define("HorizontalLine", {
     this.superInit({
       width: 640,
       height: 1,
-      fill: 'red',
+      fill: '#2e8b57',
       stroke: null,
     });
     // 3次元座標
     this.vec3 = Vector3(x, y, z);
+    //
+    this.alpha = 0.6;
   },
 });
 /*
