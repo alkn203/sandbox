@@ -1,0 +1,340 @@
+<!doctype html>
+ 
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <title>スライドスクロール</title>
+    <meta name="description" content="${description}" />
+    
+    <style>*, *:before, *:after {
+  box-sizing: border-box; 
+}
+html {
+  font-size: 62.5%;
+}
+body {
+  color: #444;
+  background-color: hsl(0, 0%, 96%);
+}
+h1 {
+  font-size: 1.8rem;
+}
+
+canvas {
+  outline: none;
+}</style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/gh/phinajs/phina.js@v0.2.3/build/phina.js"></script>
+    <script>phina.globalize();
+// アセット
+var ASSETS = {
+  // 画像
+  image: {
+    'tomapiko': 'https://cdn.jsdelivr.net/gh/phinajs/phina.js@develop/assets/images/tomapiko_ss.png',
+    'tiles': 'https://cdn.jsdelivr.net/gh/alkn203/assets_etc/tiles.png',
+  },
+  // フレームアニメーション情報
+  spritesheet: {
+    'tomapiko_ss': 'https://cdn.jsdelivr.net/gh/phinajs/phina.js@develop/assets/tmss/tomapiko.tmss',
+  },
+};
+// 定数
+var GRID_SIZE     = 64; // グリッドのサイズ
+var GRID_X        = 16; // 横のグリッド数
+var GRID_Y        = 9; // 縦のグリッド数
+var SCREEN_WIDTH  = GRID_X * GRID_SIZE; // 画面横サイズ
+var SCREEN_HEIGHT = GRID_Y * GRID_SIZE; // 画面縦サイズ
+var GRAVITY       = 9.8 / 18; // 重力
+var JUMP_POWER    = 10; // ジャンプ力
+var PLAYER_SPEED  = 6;
+var DEBUG = true;
+// ステージデータ
+var STAGE = ['40000000000000000000000000000004',
+             '40000000000000000000000000000004',
+             '40000000000000000000000000000004',
+             '40000000000000000000000000000004',
+             '40000000000000000000000000000004',
+             '40000000000000000000000000000004',
+             '40000000000000000000000000000004',
+             '40000000000001111000000330000004',
+             '41111111111112222111111111111114'];
+// メインシーン
+phina.define('MainScene', {
+  superClass: 'DisplayScene',
+  // コンストラクタ
+  init: function() {
+    // 親クラス初期化
+    this.superInit({
+      width: SCREEN_WIDTH,
+      height: SCREEN_HEIGHT,
+    });
+    // 背景色
+    this.backgroundColor = 'skyblue';
+    // 画面のグリッド
+    this.gx = Grid(SCREEN_WIDTH, GRID_X);
+    this.gy = Grid(SCREEN_HEIGHT, GRID_Y);
+    // グループ
+    this.objectGroup = DisplayElement().addChildTo(this);
+    //
+    this.player = Player().addChildTo(this);
+    this.player.setPosition(this.gx.center(), this.gy.span(7.5));
+    //
+    this.setStage(STAGE);
+  },
+  // マップ作成
+  setStage: function(stage) {
+    var half = GRID_SIZE / 2;
+    var self = this;
+    // マップデータをループ
+    stage.each(function(arr, j) {
+      // 配列に変換
+      arr.toArray().each(function(id, i) {
+        var x = self.gx.span(i) + half;
+        var y = self.gy.span(j) + half;
+        // 数値の場合
+        if (isFinite(id) && id > 0) {
+          // タイルセットからスプライト作成
+          var elem = Sprite('tiles', GRID_SIZE, GRID_SIZE).addChildTo(self.objectGroup);
+          elem.setPosition(x, y);
+          elem.frameIndex = id - 1;
+          return;
+        }
+      });
+    });
+  },
+  // 毎フレーム更新処理
+  update: function(app) {
+    this.checkHorizontalState();
+    this.checkVerticalState(app);
+  },
+  // 横方向の状態チェック
+  checkHorizontalState: function() {
+    var player = this.player;
+    var state = this.player.horizontalState;
+    // プレイヤーの状態で分ける
+    switch (state) {
+      // 左移動中
+      case 'MOVING_LEFT':
+        if (this.collisionX()) {
+          player.reflectX();
+          player.horizontalState = 'MOVING_RIGHT';
+        }
+        else {
+          if (player.x < 0) {
+            player.horizontalState = 'STOP';
+            player.verticalState = 'STOP';
+            player.vy = 0;
+            //
+            this.scrollX();
+          }
+          else {
+            player.moveX();
+          }
+        }
+        break;
+      // 右移動中
+      case 'MOVING_RIGHT':
+        if (this.collisionX()) {
+          player.reflectX();
+          player.horizontalState = 'MOVING_LEFT';
+        }
+        else {
+          if (player.x > SCREEN_WIDTH) {
+            player.horizontalState = 'STOP';
+            player.verticalState = 'STOP';
+            player.vy = 0;
+            this.scrollX();
+          }
+          else {
+            player.moveX();
+          }
+        }
+        break;
+      // 停止中
+      case 'STOP':
+        break;
+    }
+  },
+  // 縦方向の状態チェック
+  checkVerticalState: function(app) {
+    var player = this.player;
+    var state = this.player.verticalState;
+    var p = app.pointer;
+    // プレイヤーの状態で分ける
+    switch (state) {
+      // 立っている
+      case 'STANDING':
+        // タッチ開始
+        if (p.getPointingStart()) {
+          player.vy = -JUMP_POWER;
+          player.verticalState = 'JUMPING';
+          // アニメーション変更
+          player.anim.gotoAndPlay('fly');
+        }
+        else {
+          if (!this.collisionY()) {
+            player.moveY();
+            player.verticalState = 'FALLING';
+          }
+        }
+        break;
+      // ジャンプ中
+      case 'JUMPING':
+        // 落下
+        if (player.vy > 0) {
+          player.verticalState = 'FALLING';
+        }
+        else {
+          player.moveY();
+        }
+        break;
+      // 落下中  
+      case 'FALLING':
+         if (this.collisionY()) {
+          player.vy = 0;
+          player.verticalState = 'STANDING';
+          player.anim.gotoAndPlay('left');
+        }
+        else {
+          player.moveY();
+        }
+        break;
+      //
+      case 'STOP':
+        break;
+    }    
+  },
+  // 横方向の当たり判定
+  collisionX: function() {
+    var player = this.player;
+    var vx = player.vx;
+    // 当たり判定用の矩形
+    var rect = Rect(player.left + vx, player.top, player.width, player.height);
+    var result = false;
+    // ブロックグループをループ
+    this.objectGroup.children.some(function(obj) {
+      // ブロックとのあたり判定
+      if (Collision.testRectRect(rect, obj)) {
+        // 左から
+        if (rect.x < obj.x) player.right = obj.left;
+        // 右から
+        if (obj.x < player.x) player.left = obj.right; 
+        
+        result = true;
+        return true;
+      }
+    });
+    return result;
+  },
+  // 縦方向の当たり判定
+  // 縦方向の当たり判定
+  collisionY: function() {
+    var player = this.player;
+    // 床に乗っている場合は強引に当たり判定を作る
+    var vy = player.vy === 0 ? 4: player.vy;
+    // 当たり判定用の矩形
+    var rect = Rect(player.left, player.top + vy, player.width, player.height);
+    var result = false;
+    // ブロックグループをループ
+    this.objectGroup.children.some(function(obj) {
+      // ブロックとのあたり判定
+      if (Collision.testRectRect(rect, obj)) {
+        // 上から
+        if (rect.y < obj.y) player.bottom = obj.top;
+        
+        result = true;
+        return true;
+      }
+    });
+    return result;
+  },
+  // 画面スクロール
+  scrollX: function() {
+    var player = this.player;
+    var flows = [];
+    // スクロール方向を決める
+    var dir = player.vx > 0 ? -1 : 1;
+    // 背景オブジェクトの移動
+    this.objectGroup.children.each(function(obj) {
+      var flow = Flow(function(resolve) {
+        obj.tweener.by({x: dir * SCREEN_WIDTH}, 1000)
+                   .call(function() {
+                     resolve();
+                   }).play();
+      });
+      // flow配列に追加
+      flows.push(flow);
+    });
+    // プレーヤー
+    var flow = Flow(function(resolve) {
+      player.tweener.by({x: dir * SCREEN_WIDTH}, 1000)
+                    .call(function() {
+                      resolve();
+                    }).play();
+    });
+    
+    flows.push(flow);
+    // 非同期処理
+    Flow.all(flows).then(function() {
+      // プレイヤー移動再開
+      player.horizontalState = player.vx > 0 ? 'MOVING_RIGHT': 'MOVING_LEFT';
+      player.verticalState = 'FALLING';
+    });
+  },
+});
+// プレイヤークラス
+phina.define('Player', {
+  superClass: 'Sprite',
+  // コンストラクタ
+  init: function() {
+    // 親クラス初期化
+    this.superInit('tomapiko', GRID_SIZE, GRID_SIZE);
+    // フレームアニメーションをアタッチ
+    this.anim = FrameAnimation('tomapiko_ss').attachTo(this);
+    //
+    this.anim.gotoAndPlay('left');
+    //
+    this.scaleX *= -1;
+    // 横移動速度
+    this.vx = PLAYER_SPEED;
+    // 縦移動速度
+    this.vy = 0;
+    // 横方向の状態
+    this.horizontalState = 'MOVING_RIGHT';
+    // 縦方向の状態
+    this.verticalState = 'FALLING';
+  },
+  // 横方向移動
+  moveX: function() {
+    this.x += this.vx;
+  },
+  // 縦方向移動
+  moveY: function() {
+    this.vy += GRAVITY;
+    this.y += this.vy;
+  },
+  // 反転処理
+  reflectX: function() {
+    this.vx *= -1;
+    this.scaleX *= -1;
+  },
+});
+// メイン
+phina.main(function() {
+  var app = GameApp({
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+    startLabel: 'main',
+    // アセット読み込み
+    assets: ASSETS,
+  });
+  
+  app.run();
+});</script>
+  </body>
+</html>
+
