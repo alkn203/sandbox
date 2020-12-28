@@ -1,49 +1,11 @@
-<!doctype html>
- 
-<html>
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, user-scalable=no" />
-    <meta name="apple-mobile-web-app-capable" content="yes" />
-    
-    <title>Forked: phina.js と html5の連携</title>
-    <meta name="description" content="${description}" />
-    <script src='https://cdnjs.cloudflare.com/ajax/libs/riot/2.3.18/riot+compiler.js'></script>
-    
-    <style>*, *:before, *:after {
-  box-sizing: border-box; 
-}
-html {
-  font-size: 62.5%;
-}
-body {
-  color: #444;
-  background-color: hsl(0, 0%, 96%);
-}
-h1 {
-  font-size: 1.8rem;
-}
-
-h2 {
-  text-align: center;
-  font-style: italic;
-}
-
-#mycanvas {
-  margin: 0 auto;
-  width: 30%;
-  display: block;
-}</style>
-  </head>
-  <body>
-    <script src="https://cdn.jsdelivr.net/gh/phi-jp/phina.js@v0.2.3/build/phina.js"></script>
-    <script>// グローバルに展開
+// グローバルに展開
 phina.globalize();
 // アセット
 var ASSETS = {
   // 画像
   image: {
     'tomapiko': 'https://cdn.jsdelivr.net/gh/phinajs/phina.js@develop/assets/images/tomapiko_ss.png',
+    'tiles': 'https://cdn.jsdelivr.net/gh/alkn203/assets_etc/tiles.png',
   },
   // フレームアニメーション情報
   spritesheet: {
@@ -62,16 +24,30 @@ phina.define("MainScene", {
     this.superInit();
     // 背景色
     this.backgroundColor = 'black';
-    //
-    var sp = Sprite('tomapiko').addChildTo(this);
-    // ドロップダウンリストを取得
-    var selector = document.getElementById('color_selector');
-    selector.addEventListener('change', function(event) {
-      shape.fill = event.target.value;
-    });
     // アセットマネージャー
     var manager = phina.asset.AssetManager;
-    console.log(Object.keys(manager.assets.image));
+    // グループ
+    var imageGroup = DisplayElement().addChildTo(this);
+    // 画像アセット名の配列
+    var images = Object.keys(manager.assets.image);
+    // ドロップダウンリストを取得
+    var selector = document.querySelector('#image_selector');
+    // 選択肢を動的に作成
+    images.each(function(name) {
+      var op = document.createElement('option');
+      op.text = name;
+      selector.appendChild(op);
+    });
+    // 一番目の画像を表示
+    var sp = Sprite(images.first).addChildTo(imageGroup);
+    sp.setPosition(this.gridX.center(), this.gridY.center());
+    var self = this;
+    // 選択肢変更イベント
+    selector.addEventListener('change', function(event) {
+      imageGroup.children.clear();
+      var sp = Sprite(event.target.value).addChildTo(imageGroup);
+      sp.setPosition(self.gridX.center(), self.gridY.center());
+    });
   },
 });
 /*
@@ -93,31 +69,4 @@ phina.main(function() {
   //app.enableStats();
   // 実行
   app.run();
-});</script>
-    <canvas id="mycanvas"></canvas>
-    <!-- ユーザー定義のタグをここに展開 -->
-    <app title='Hello, Riot.js'></app>
-    <!-- app タグを定義 -->
-    <script type="riot/tag">
-      <app>
-        <br>
-        <center><select id="color_selector">
-          <option each="{ colors }">{ color }</option>
-        </select></center>
-
-        this.title = opts.title;
-        this.colors = [
-          {'color': 'red'},
-          {'color': 'blue'},
-          {'color': 'yellow'}
-        ];
-      </app>
-    </script>
-    
-    <script>
-      // マウント
-      riot.mount('*');
-    </script>
-    </body>
-</html>
-
+});
