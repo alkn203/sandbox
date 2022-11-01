@@ -36,32 +36,34 @@ var WALL_NUM_Y = 15; // 縦の壁数（奇数）
 var MAZE_WIDTH = TILE_SIZE * WALL_NUM_X; // 迷路横サイズ
 var MAZE_HEIGHT = TILE_SIZE * WALL_NUM_Y; // 迷路縦サイズ
 var OFFSET = TILE_SIZE / 2;
-// 上下左右方向
-var DIRECTIONS = [Vector2(-1, 0), Vector2(0, -1), Vector2(1, 0), Vector2(0, 1)];
+var FLOOR = 0;
+var WALL = 1;
+// 上下左右方向ベクトル
+var DIR_ARRAY = [Vector2.UP, Vector2.DOWN, Vector2.LEFT, Vector2.RIGHT];
 // アセット
 var ASSETS = {
   // 画像
   image: {
-    'tile': 'https://cdn.jsdelivr.net/gh/alkn203/assets_etc@master/tiles2.png',
+    'tile': 'https://cdn.jsdelivr.net/gh/alkn203/assets_etc@master/tiles3.png',
   },
 };
 // マップデータ
 var MAP = [
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0],
-  [0,0,0,0,0,0,0,0,0]];
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1],
+  [1,1,1,1,1,1,1,1,1]];
 
 // メインシーン
 phina.define('MainScene', {
@@ -74,7 +76,7 @@ phina.define('MainScene', {
       height: MAZE_HEIGHT,
     });
     // マップクラス
-    var map = phina.util.Map({
+    this.map = phina.util.Map({
       tileWidth: TILE_SIZE,
       tileHeight: TILE_SIZE,
       imageName: 'tile',
@@ -87,48 +89,49 @@ phina.define('MainScene', {
        // 最初の穴掘り（奇数位置）
     var randI = Array.range(1, WALL_NUM_X, 2).random();
     var randJ = Array.range(1, WALL_NUM_Y, 2).random();
-    //this.deleteWall(randI, randJ);
+    this.map.setTileByIndex(randI, randJ, FLOOR);
     // 起点に穴掘り開始
-    //this.dig(randI, randJ);
+    this.dig(randI, randJ);
   },
   // 穴掘り処理
   dig: function(i, j) {
+    
+    var map = this.map;
+    var self = this;
+    
     var nextI = i;
     var nextJ = j;
     // 分岐点登録
     this.registBranch(i, j);
     // ランダムな順番で
-    var canDig = DIRECTIONS.shuffle().some(function(direction) {
+    var canDig = DIR_ARRAY.shuffle().some(function(direction) {
       var i2 = i + direction.x * 2;
       var j2 = j + direction.y * 2;
-      // 2マス先が壁か調べる
-      if (this.getWall(i2, j2)) {
-        // 壁なら2マス先まで掘る
-        this.deleteWall(i + direction.x, j + direction.y);
-        this.deleteWall(i2, j2);
-        // 次の起点
-        nextI = i2;
-        nextJ = j2;
-        return true;
+      // 掘れる範囲なら
+      if ((i2 > 0 && i2 < WALL_NUM_X) && (j2 > 0 && j2 < WALL_NUM_Y)) {
+        // 2マス先が壁か調べる
+        if (map.checkTileByIndex(i2, j2) === WALL) {
+          // 壁なら2マス先まで掘る
+          map.setTileByIndex(i + direction.x, j + direction.y, FLOOR);
+          map.setTileByIndex(i2, j2, FLOOR);
+          // 次の起点
+          nextI = i2;
+          nextJ = j2;
+          return true;
+        }
       }
-    }, this);
+    });
     // 掘り進められるのであれば
     if (canDig) {
       // 2マス先を開始位置にして再帰処理
       this.dig(nextI, nextJ);
-    }
+   }
     else {
       // 分岐点として使えないので削除
       this.deleteBranch(nextI, nextJ);
       // これまでの分岐点から掘り進めるものを探す
       this.searchBranch();
     }
-  },
-  // 指定された位置の壁を削除
-  deleteWall: function(indexI, indexJ) {
-    this.wallGroup.children.eraseIfAll(function(wall) {
-      return (wall.i === indexI && wall.j === indexJ);
-    });
   },
   // 分岐点を登録
   registBranch: function(indexI, indexJ) {
@@ -153,18 +156,6 @@ phina.define('MainScene', {
       var rand = this.branches.random();
       this.dig(rand.i, rand.j);
     }
-  },
-  // 指定されたインデックス位置が壁か調べる
-  getWall: function(i, j) {
-    var result = null;
-    
-    this.wallGroup.children.some(function(wall) {
-      if (wall.i === i && wall.j === j) {
-        result = wall;
-        return true;
-      } 
-    });
-    return result;
   },
 });
 // 壁クラス
