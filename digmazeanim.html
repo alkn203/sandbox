@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, user-scalable=no" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     
-    <title>Forked: Maze at random  穴掘り法</title>
+    <title>Maze at random  穴掘り法 アニメーション</title>
     <meta name="description" content="* 穴掘り法による迷路作成" />
     
     <style>*, *:before, *:after {
@@ -82,16 +82,18 @@ phina.define('MainScene', {
       imageName: 'tile',
       mapData: MAP,
     }).addChildTo(this);
-    // グループ
-    this.floorGroup = DisplayElement().addChildTo(this);
     // 分岐点候補
     this.branches = [];
+    // 穴を掘るば位置
+    this.digPos = [];
        // 最初の穴掘り（奇数位置）
     var randI = Array.range(1, WALL_NUM_X, 2).random();
     var randJ = Array.range(1, WALL_NUM_Y, 2).random();
     this.map.setTileByIndex(randI, randJ, FLOOR);
     // 起点に穴掘り開始
     this.dig(randI, randJ);
+    //
+    this.showDig();
   },
   // 穴掘り処理
   dig: function(i, j) {
@@ -111,9 +113,12 @@ phina.define('MainScene', {
       if ((i2 > 0 && i2 < WALL_NUM_X) && (j2 > 0 && j2 < WALL_NUM_Y)) {
         // 2マス先が壁か調べる
         if (map.checkTileByIndex(i2, j2) === WALL) {
-          // 壁なら2マス先まで掘る
-          map.setTileByIndex(i + direction.x, j + direction.y, FLOOR);
-          map.setTileByIndex(i2, j2, FLOOR);
+          // 壁なら2マス先まで掘るフラグ設定
+          map.setTileByIndex(i + direction.x, j + direction.y, -1);
+          map.setTileByIndex(i2, j2, -1);
+          // 掘る位置を格納
+          self.digPos.push(Vector2(i + direction.x, j + direction.y));
+          self.digPos.push(Vector2(i2, j2));
           // 次の起点
           nextI = i2;
           nextJ = j2;
@@ -157,21 +162,18 @@ phina.define('MainScene', {
       this.dig(rand.i, rand.j);
     }
   },
-});
-// 壁クラス
-phina.define('Wall', {
-  // RectangleShapeを継承
-  superClass: 'RectangleShape',
-    // コンストラクタ
-    init: function() {
-      // 親クラス初期化
-      this.superInit({
-        width: WALL_SIZE,
-        height: WALL_SIZE,
-        fill: 'silver',
-        stroke: 'white',
-      });
-    },
+  // 徐々に穴を掘る様子を見せる
+  showDig:function() {
+    var self = this;
+
+    this.digPos.each(function(pos, i) {
+      self.tweener.wait(100)
+                  .call(function() {
+                     self.map.setTileByIndex(pos.x, pos.y, FLOOR);
+                  });
+    });
+    this.tweener.play();
+  },
 });
 // メイン
 phina.main(function() {
