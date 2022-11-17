@@ -1,0 +1,124 @@
+<!doctype html>
+ 
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <title>option moving test</title>
+    <meta name="description" content="* STGによくあるオプションの動き
+* プレイヤーはタッチ位置（押しっぱなし可）に移動" />
+    
+    <style>*, *:before, *:after {
+  box-sizing: border-box; 
+}
+html {
+  font-size: 62.5%;
+}
+body {
+  color: #444;
+  background-color: hsl(0, 0%, 96%);
+}
+h1 {
+  font-size: 1.8rem;
+}
+
+</style>
+  </head>
+  <body>
+   <script src="https://cdn.jsdelivr.net/gh/phinajs/phina.js@v0.2.3/build/phina.js"></script>
+    <script>// グローバルに展開
+phina.globalize();
+/*
+ * メインシーン
+ */
+phina.define("MainScene", {
+  // 継承
+  superClass: 'DisplayScene',
+  // 初期化
+  init: function() {
+    // super init
+    this.superInit();
+    // 背景色
+    this.backgroundColor = '#444';
+    
+    var center = Vector2(this.gridX.center(), this.gridY.center());
+    // オプショングループ
+    var optionGroup = DisplayElement().addChildTo(this);
+    // プレイヤーの位置記録用
+    var locations = [];
+    // 位置初期化
+    (128).times(function() {
+      locations.push({x: center.x, y: center.y});
+    });
+    // オプション作成
+    (4).times(function(index) {
+      CircleShape({
+        radius: 20,
+        x: center.x,
+        y: center.y,
+      }).addChildTo(optionGroup);
+    });
+    // プレイヤー
+    var player = TriangleShape({
+      x: center.x,
+      y: center.y,
+    }).addChildTo(this);
+    // 参照用
+    this.player = player;
+    this.optionGroup = optionGroup;
+    this.locations = locations;
+  },
+  // タッチ移動時
+  onpointmove: function(e) {
+    this.movePlayer(e);
+  },
+  // タッチ静止時
+  onpointstay: function(e) {
+    this.movePlayer(e);
+  },
+  // タッチリリース時
+  onpointend: function() {
+    this.player.tweener.clear();
+  },
+  // プレイヤー移動
+  movePlayer: function(e) {
+    var to = Vector2(e.pointer.x | 0, e.pointer.y | 0);
+    var dx = to.x - this.player.x;
+    var dy = to.y - this.player.y;
+    var dist2 = dx * dx + dy * dy;
+    // プレイヤーはタッチ位置から少し離す    
+    if (dist2 < 64 * 64) {
+      this.player.tweener.clear();
+    }
+    else {
+      this.player.tweener.clear().to({x: to.x, y: to.y}, 400);
+      // プレイヤーの位置を記録
+      this.locations.shift();
+      this.locations.push({x: this.player.x, y: this.player.y});
+    }
+    // オプション移動
+    this.optionGroup.children.each(function(option, index) {
+      var location = this.locations[index * 32]; // 数字は間隔
+      option.tweener.clear().to({x: location.x, y: location.y}, 150);        
+    }, this);
+  },
+});
+/*
+ * メイン処理
+ */
+phina.main(function() {
+  // アプリケーションを生成
+  var app = GameApp({
+    startLabel: 'main', // MainScene から開始
+    fps: 60,
+  });
+
+  app.enableStats();
+  // 実行
+  app.run();
+});</script>
+  </body>
+</html>
+
