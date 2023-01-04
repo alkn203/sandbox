@@ -1,0 +1,546 @@
+<!doctype html>
+ 
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, user-scalable=no" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    
+    <title>Forked: Mine Detector</title>
+    <meta name="description" content="${description}" />
+    
+    <style>*, *:before, *:after {
+  box-sizing: border-box; 
+}
+html {
+  font-size: 62.5%;
+}
+body {
+  color: #444;
+  background-color: hsl(0, 0%, 96%);
+}
+h1 {
+  font-size: 1.8rem;
+}
+
+</style>
+  </head>
+  <body>
+    <script src="https://cdn.jsdelivr.net/gh/phi-jp/phina.js@v0.2.3/build/phina.js"></script>
+    <script>phina.globalize();
+// 定数
+var SCREEN_WIDTH = 640; // 画面横サイズ
+var PANEL_NUM_XY = 4; // 縦横のパネル数
+var PANEL_NUM = PANEL_NUM_XY * PANEL_NUM_XY;
+var GRID_SIZE = (SCREEN_WIDTH - 10) / PANEL_NUM_XY; // グリッドのサイズ
+var SCREEN_HEIGHT = GRID_SIZE * 6; // 画面縦サイズ
+var PANEL_SIZE = GRID_SIZE * 0.9; // パネルの大きさ
+var PANEL_OFFSET = (GRID_SIZE + 10) / 2; // オフセット値
+var BOMB_NUM = 4; // 爆弾数
+var NUM_NUM = 8; // 表示する数字の数
+var PANEL_COLOR = 'silver';
+var CORRECT_COLOR = 'hsl(160, 80%, 50%)';
+// メインシーン
+phina.define('MainScene', {
+  superClass: 'DisplayScene',
+  // コンストラクタ
+  init: function() {
+    // 親クラス初期化
+    this.superInit({
+      width: SCREEN_WIDTH,
+      height: SCREEN_HEIGHT,
+    });
+    // 背景色
+    this.backgroundColor = 'gray';
+    // パネルグループ
+    this.panelGroup = DisplayElement().addChildTo(this);
+    // ダミーグループ
+    this.dummyGroup = DisplayElement();
+    // 爆弾数管理用
+    this.bombs = 0;
+    // ラウンド数
+    this.round = 1;
+    // パネル情報配列初期化
+    this.setPanelInfoArray();
+    // UI配置
+    this.setUI();
+    // パネルを開く
+    this.turnPanelsUp();
+  },
+  // パネル情報配列セット
+  setPanelInfoArray: function() {
+    // パネル情報配列
+    var panelInfo = [];
+    // 一旦0で埋める
+    (PANEL_NUM).times(function(i) {
+      panelInfo.push('0');
+    });
+    // b:爆弾 n:開けるマス
+    panelInfo.fill('b', 0, BOMB_NUM).fill('n', BOMB_NUM, BOMB_NUM + NUM_NUM);
+    this.panelInfo = panelInfo;
+  },
+  // パネル作成
+  createPanels: function() {
+    this.bombs = 0;
+    
+    this.panelGroup.children.clear();
+    // グリッド
+    var grid = Grid(GRID_SIZE * PANEL_NUM_XY, PANEL_NUM_XY);
+    var self = this;
+    
+    (PANEL_NUM).times(function(i) {
+      // インデックス位置設定
+      var xIndex = i % PANEL_NUM_XY;
+      var yIndex = (i / PANEL_NUM_XY).floor();
+      var panel = Panel().addChildTo(self.panelGroup);
+      // Gridで配置
+      panel.x = grid.span(xIndex) + PANEL_OFFSET;
+      panel.y = grid.span(yIndex) + PANEL_OFFSET;
+    });
+    //
+    this.panelGroup.y = this.gridY.span(2.5);
+  },
+  // パネル情報退避復元
+  restorePanels: function() {
+    var panels = this.panelGroup.children;
+    var dummys = this.dummyGroup.children;
+    var len = panels.length;
+    var self = this;
+    
+    dummys.clear();
+    // ダミーグループへ移動
+    (len).times(function(i) {
+      panels.shift().addChildTo(self.dummyGroup);
+    });
+    
+    this.createPanels();
+    // 属性コピー
+    (len).times(function(i) {
+      panels[i].fill = dummys[i].fill;
+      panels[i].info = dummys[i].info;
+      panels[i].num = dummys[i].num;
+      panels[i].mark = dummys[i].mark;
+    });
+    // 各種表示
+    panels.each(function(panel) {
+      if (panel.info === 'n') panel.showNumber();
+      if (panel.mark === 'bomb') Bomb().addChildTo(panel);
+      if (panel.mark === 'cross') CrossMark().addChildTo(panel);
+    });
+  },
+  // パネルイベント設定
+  setPanelEvents: function() {
+    var self = this;
+    
+    this.panelGroup.children.each(function(panel) {
+      // 数字パネル
+      if (panel.info === 'n') {
+        panel.onpointstay = function() {
+          // 周りのパネルをハイライト
+          self.hilightPanels(panel);
+        };
+        // 元に戻す
+        panel.onpointend = function() {
+          self.panelGroup.children.each(function(panel) {
+            panel.fill = PANEL_COLOR;  
+          }); 
+        };
+      }
+      else {
+        panel.onpointend = function() {
+          if (panel.mark === 'none') {
+            // ×マーク設置
+            CrossMark().addChildTo(panel);
+            panel.setMark('cross');
+            return;
+          }
+
+          if (panel.mark === 'cross') {
+            panel.children.clear();
+            // 最大設置数チェック
+            if (self.bombs === BOMB_NUM) {
+              panel.setMark('none');
+              return;
+            }
+            // 爆弾マーク設置
+            Bomb().addChildTo(panel);
+            panel.setMark('bomb');
+            self.bombs++;
+            return;
+          }
+
+          panel.children.clear();
+          panel.setMark('none');
+          self.bombs--;
+        };
+      }
+    });
+  },
+  // UI設置
+  setUI: function() {
+    var self = this;
+    // ラウンド数ラベル
+    var label = Label('a').addChildTo(this);
+    label.setPosition(this.gridX.center(), this.gridY.span(0.5));
+    label.text = 'Round: {0}'.format(this.round);
+    // タイマーゲージ
+    var gauge = TimerGauge().addChildTo(this);
+    gauge.setPosition(this.gridX.center(), this.gridY.span(1.5));
+    // ゲージ満タン時
+    gauge.onfull = function() {
+      // ラウンド数アップ
+      self.round++;
+      label.text = 'Round: {0}'.format(self.round);
+      self.turnPanelsUp();
+    };
+    // ゲージ空時
+    gauge.onempty = function() {
+      self.exit();
+    };
+    
+    this.gauge = gauge;
+    
+    var judge_button = Button({
+      text: 'JUDGE',
+      width: 128,
+      height: 96,
+      x: this.gridX.center(),
+      y: this.gridY.span(14.5),
+      fill: PANEL_COLOR,
+    }).addChildTo(this);
+    // 判定ボタンを押している時  
+    judge_button.onpointstay = function() {
+      this.fill = CORRECT_COLOR;
+      this.setScale(0.9);
+    };
+    // 判定ボタンを押した後  
+    judge_button.onpointend = function() {
+      this.fill = PANEL_COLOR;
+      this.setScale(1.0);
+      // 判定
+      self.judge();
+    };
+  },
+  // パネル情報セット
+  setPanelInfo: function() {
+    var self = this;
+    // パネル情報シャッフル
+    this.panelInfo.shuffle();
+    // パネル情報紐付け
+    this.panelGroup.children.each(function(panel, i) {
+      panel.info = self.panelInfo[i];
+      panel.mark = 'none';
+      // デバッグ用
+      if (panel.info === 'b') {
+      CircleShape().addChildTo(panel)
+      }
+    });
+    // 爆弾数を計算してセット    
+    this.panelGroup.children.each(function(panel) {
+      if (panel.info === 'n') {
+        panel.num = self.getBombsNumAround(panel);
+      }
+    });
+  },
+  // 周りの爆弾数を計算して返す
+  getBombsNumAround: function(panel) {
+    var bombs = 0;
+    var indexs = [-1, 0, 1];
+    var self = this;
+    // 周りのパネルの爆弾数をカウント
+    indexs.each(function(i) {
+      indexs.each(function(j) {
+        var pos = Vector2(panel.x + i * GRID_SIZE, panel.y + j * GRID_SIZE);
+        var target = self.getPanel(pos);
+        if (target && target.info === 'b') bombs++;
+      });
+    });
+    return bombs;
+  },
+  // 周りのパネルをハイライトさせる
+  hilightPanels: function(panel) {
+    var indexs = [-1, 0, 1];
+    var self = this;
+    
+    indexs.each(function(i) {
+      indexs.each(function(j) {
+        if (i === 0 && j === 0) {
+
+        }
+        else {
+          var pos = Vector2(panel.x + i * GRID_SIZE, panel.y + j * GRID_SIZE)
+          var target = self.getPanel(pos)
+          if (target) target.fill = 'lime'
+        }
+      })
+    })
+  },
+  // 爆弾位置判定
+  judge: function() {
+    var self = this;
+    var count = 0;
+    //
+    this.panelGroup.children.each(function(panel) {
+      // 爆弾の位置が合っているか比較
+      if (panel.info === 'b' && panel.mark === 'bomb') {
+        panel.isMatch = true;
+        count++;
+      }
+    });
+    // 全て合っていたらパネルアニメーション
+    if (count === BOMB_NUM) {
+      this.expandPanels();
+    }
+  },
+  // 正解アニメーション
+  expandPanels: function() {
+    var self = this;
+    var flows = [];
+    
+    this.setPanelsInteractive(false);
+    
+    this.panelGroup.children.each(function(panel) {
+      panel.tweener.remove();
+      panel._tweener = null;
+      // 爆弾一致パネル
+      if (panel.isMatch) {
+        // flow
+        var flow = Flow(function(resolve) {
+          panel.tweener.set({fill: CORRECT_COLOR})
+                       .scaleTo(1.2, 100).scaleTo(1.0, 100)
+                       .call(function() {
+                         resolve();
+                       }).play();
+        });
+        // flow配列に追加
+        flows.push(flow);
+      }
+    });
+    // 非同期処理
+    Flow.all(flows).then(function() {
+      // パネルを伏せる
+      self.turnPanelsOver();
+    });
+  },
+  // パネルを伏せる
+  turnPanelsOver: function() {
+    var self = this;
+    var flows = [];
+    
+    this.restorePanels();
+    // flow
+    this.panelGroup.children.each(function(panel) {
+      var flow = Flow(function(resolve) {
+        panel.tweener.wait(200)
+                     .to({scaleX: 0.0}, 200)
+                     .call(function() {
+                       panel.children.clear();
+                       panel.fill = PANEL_COLOR;
+                     })
+                     .to({scaleX: 1.0}, 200)
+                     .call(function() {
+                       resolve();
+                     }).play();
+      });
+      // flow配列に追加
+      flows.push(flow);
+    });
+    // 非同期処理
+    Flow.all(flows).then(function() {
+      // パネルを開く
+      self.gauge.pause();
+      self.gauge.fillGauge();
+    });
+  },
+  // パネルを開く
+  turnPanelsUp: function() {
+    var self = this;
+    var flows = [];
+    
+    this.createPanels();
+    this.setPanelInfo();
+    this.setPanelEvents();
+    // flow
+    this.panelGroup.children.each(function(panel) {
+      var flow = Flow(function(resolve) {
+        panel.tweener.wait(200)
+                     .to({scaleX: 0.0}, 200)
+                     .call(function() {
+                        // 数字表示
+                        if (panel.info === 'n') {
+                          panel.showNumber();
+                        }
+                     })
+                     .to({scaleX: 1.0}, 200)
+                     .call(function() {
+                       resolve();
+                     }).play();
+      });
+      // flow配列に追加
+      flows.push(flow);
+    });
+    // 非同期処理
+    Flow.all(flows).then(function() {
+      self.setPanelsInteractive(true);
+      self.gauge.run();
+    });
+  },
+  //
+  setPanelsInteractive: function(b) {
+    this.panelGroup.children.each(function(panel) {
+      panel.setInteractive(b);
+    });
+  },
+  // 指定された位置のパネルを返す
+  getPanel: function(pos) {
+    var result = null;
+    
+    this.panelGroup.children.some(function(panel) {
+      if (panel.position.equals(pos)) {
+        result = panel;
+        return true;
+      } 
+    });
+    return result;
+  },
+});
+// パネルクラス
+phina.define('Panel', {
+  // RectangleShapeを継承
+  superClass: 'RectangleShape',
+    // コンストラクタ
+    init: function() {
+      // 親クラス初期化
+      this.superInit({
+        width: PANEL_SIZE,
+        height: PANEL_SIZE,
+        fill: PANEL_COLOR, // 塗りつぶし色
+        stroke: 'white', // 枠の色
+        cornerRadius: 2, // 角の丸み
+      });
+    },
+    // 数字表示
+    showNumber: function() {
+      Label({
+        text: this.num,
+        fontSize: PANEL_SIZE * 0.8,
+        fill: 'black',
+      }).addChildTo(this);
+    },
+    //
+    setMark: function(mark) {
+      this.mark = mark;
+    },
+});
+// 爆弾クラス
+phina.define('Bomb', {
+  // Shapeを継承
+  superClass: 'Shape',
+    // コンストラクタ
+    init: function() {
+      // 親クラス初期化
+      this.superInit({
+        width: GRID_SIZE,
+        height: GRID_SIZE,
+        backgroundColor: 'transparent',
+      });
+      // 導線
+      RectangleShape({
+        width: PANEL_SIZE / 8,
+        height: PANEL_SIZE / 8,
+        fill: "navy",
+        stroke: 'white',
+        y: -40,
+      }).addChildTo(this);
+      // 本体
+      CircleShape({
+        radius: PANEL_SIZE / 4,
+        fill: "navy",
+        stroke: 'white',
+      }).addChildTo(this);
+    },
+});
+// ×マーククラス
+phina.define('CrossMark', {
+  // Shapeを継承
+  superClass: 'Shape',
+    // コンストラクタ
+    init: function() {
+      // 親クラス初期化
+      this.superInit({
+        width: PANEL_SIZE,
+        height: PANEL_SIZE,
+        backgroundColor: 'transparent',
+      });
+    
+      RectangleShape({
+        width: PANEL_SIZE / 10,
+        height: PANEL_SIZE,
+        fill: "red",
+        stroke: "red",
+        rotation: 45,
+      }).addChildTo(this);
+
+      RectangleShape({
+        width: PANEL_SIZE / 10,
+        height: PANEL_SIZE,
+        fill: "red",
+        stroke: "red",
+        rotation: -45,
+      }).addChildTo(this);
+    },
+});
+// タイムゲージクラス
+phina.define('TimerGauge', {
+  // Guageを継承
+  superClass: 'Gauge',
+    // コンストラクタ
+    init: function() {
+      // 親クラス初期化
+      this.superInit({
+        width: 480,
+        height: 48,
+        maxValue: 60,
+        gaugeColor: 'green',
+        fill: 'silver',
+      });
+      
+      this.subTime = 1000;
+      this.prevTime = 0;
+    },
+    //
+    run: function() {
+      this.update = this.decrease;
+    },
+    //
+    pause: function() {
+      this.update = null;
+    },
+    //
+    fillGauge: function() {
+      this.value = this.maxValue;  
+    },
+    //
+    decrease: function(app) {
+      //
+        this.currentTime = app.elapsedTime;
+        
+        if ((this.currentTime - this.prevTime) > this.subTime) {
+          this.value -= 1;
+          this.prevTime = this.currentTime;
+        }
+    },
+});
+// メイン
+phina.main(function() {
+  var app = GameApp({
+    // メイン画面からスタート
+    startLabel: 'main',
+    width: SCREEN_WIDTH,
+    height: SCREEN_HEIGHT,
+  });
+  app.run();
+});</script>
+  </body>
+</html>
+
